@@ -13,13 +13,13 @@ This script automates the process of Development and creating a GitHub pull requ
 - Create a new branch
 - Update card status to in development
 
-![alt text](./assets/image.png)
+![alt text](image.png)
 
 ### Open new Pull Request
 - Create new Pull Request with Jira information (title, summary, link) 
 - Update card status to Ready for Code Review
 
-![alt text](./assets/image-2.png)
+![alt text](image-2.png)
 
 
 ### How to Use
