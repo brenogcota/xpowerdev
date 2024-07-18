@@ -29,7 +29,7 @@ function start_dev() {
     echo "Starting development... 🚀"
 
     ## Encoded to base64
-    token="email:jira_token"
+    token="email:token"
     jira_key="$1"
     
     echo "Creating a new branch..."
@@ -47,22 +47,65 @@ function start_dev() {
    echo "Done. ✨"
 }
 
+function jira_status() {
+  token="email:token"
+
+  echo "Getting Jira status.. ♻️"
+  branch=$(git symbolic-ref -q HEAD)
+  jira_key="${branch##*/}"
+  jira_url="https://project.atlassian.net/rest/api/2/issue/$jira_key/transitions"
+
+  jira_response=$(curl -H "Authorization: Basic $token" -s "$jira_url" | jq -r '.transitions[] | @base64')
+
+  for transition in $(echo "$jira_response"); do
+    # Decode the base64 encoded JSON object
+    _jq() {
+        echo ${transition} | base64 --decode | jq -r ${1}
+    }
+
+    # Extract the transition ID and name
+    transition_id=$(_jq '.id')
+    transition_name=$(_jq '.name')
+
+    # Print or use the transition ID and name as needed
+    echo "Transition ID: $transition_id, Name: $transition_name"
+  done
+}
+
+function jira_transition() {
+    ## Encoded to base64
+    token=""
+
+    branch=$(git symbolic-ref -q HEAD)
+    jira_key="${branch##*/}"
+
+    echo "Updating card $jira_key ... ✅"
+
+    jira_transition_url="https://project.atlassian.net/rest/api/2/issue/$jira_key/transitions"
+    curl -X POST --data '{"transition": { "id": "'$transition_id'" }}' -H "Accept: application/json" -H "Content-Type: application/json" -H "Authorization: Basic $token" -s "$jira_transition_url"
+
+    echo "Done. ✨"
+}
 
 function pr_jira() {
+    transition_id="$1"
+    if [ -z "$1" ]; then
+        echo "Transition id not provided, select one 🚨"
+        jira_status
+        read input
+        transition_id=$(echo $input)
+    fi
     echo "Getting Jira card information... ✨"
     ## Encoded to base64
-    token="email:jira_token"
+    token="email:token"
 
     branch=$(git symbolic-ref -q HEAD)
     jira_key="${branch##*/}"
     jira_url="https://project.atlassian.net/rest/api/2/issue/$jira_key"
     jira_response=$(curl -H "Authorization: Basic $token" -s "$jira_url" | jq '. | "### [\(.fields.issuetype.name)] [\(.fields.summary)](https://project.atlassian.net/browse/\(.key)) \n\n \(.fields.description) \n status: \(.fields.status.name)"')
 
-    echo "Updating card $jira_key to Ready for code Review... ✅"
-
-    jira_transition_url="https://project.atlassian.net/rest/api/2/issue/$jira_key/transitions"
-    curl -X POST --data '{"transition": { "id": "101" }}' -H "Accept: application/json" -H "Content-Type: application/json" -H "Authorization: Basic $token" -s "$jira_transition_url"
-
+    jira_transition
+    
     echo "Opening new Pull Request... 🌱"
 
     github_repo="${PWD##*/}"
@@ -71,6 +114,9 @@ function pr_jira() {
     github_title="$(git log --format=%B -n 1 HEAD)"
     title=$(urlencode "$github_title")
     body=$(urlencode "$jira_response")
+    limited_string=$(printf "%.240s" "$body" | LC_CTYPE=C tr -dc '\000-\177' | cut -c -262144)
 
-    open https://github.com/project-Org/"$github_repo"/pull/new/"$github_head_branch"\?title\=$title&body\=$body
+    echo "Done. ✨"
+
+    open https://github.com/project-Org/"$github_repo"/pull/new/"$github_head_branch"\?title\=$title&body\=$limited_string
 }
